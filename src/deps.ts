@@ -122,17 +122,14 @@ const installers: Record<any, DepsInstaller> = {
       )
       const run = $({ cwd: stateDir })
       const version = (await run`pnpm --version`.quiet().nothrow(false)).stdout
-      const [major, minor, patch] =
+      const [major, minor] =
         version
           .trim()
-          .match(/^(\d+)\.(\d+)\.(\d+)/)
+          .match(/^(\d+)\.(\d+)\./)
           ?.slice(1)
           .map(Number) || []
-      if (!(
-        major > 10 ||
-        (major === 10 && (minor > 12 || (minor === 12 && patch >= 1)))
-      )) {
-        throw new Fail('The pnpm installer requires pnpm 10.12.1 or newer')
+      if (!(major > 11 || (major === 11 && minor >= 20))) {
+        throw new Fail('The pnpm installer requires pnpm 11.20.0 or newer')
       }
 
       const flags = [registry && `--registry=${registry}`].filter(Boolean)

@@ -93,9 +93,9 @@ var installers = {
       );
       const run = (0, import_index.$)({ cwd: stateDir });
       const version = (yield run`pnpm --version`.quiet().nothrow(false)).stdout;
-      const [major, minor, patch] = ((_a = version.trim().match(/^(\d+)\.(\d+)\.(\d+)/)) == null ? void 0 : _a.slice(1).map(Number)) || [];
-      if (!(major > 10 || major === 10 && (minor > 12 || minor === 12 && patch >= 1))) {
-        throw new import_index.Fail("The pnpm installer requires pnpm 10.12.1 or newer");
+      const [major, minor] = ((_a = version.trim().match(/^(\d+)\.(\d+)\./)) == null ? void 0 : _a.slice(1).map(Number)) || [];
+      if (!(major > 11 || major === 11 && minor >= 20)) {
+        throw new import_index.Fail("The pnpm installer requires pnpm 11.20.0 or newer");
       }
       const flags = [registry && `--registry=${registry}`].filter(Boolean);
       yield run`pnpm add --save-exact ${flags} ${packages}`.nothrow(false);

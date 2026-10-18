@@ -62,7 +62,9 @@ zx's private importer against the same `node_modules`.
 ## Operational boundaries
 
 - pnpm must be available on `PATH` and support the global virtual store
-  (pnpm 10.12.1 or newer). Initial probes used installed pnpm 12.7.0 and 11.20.0.
+  **and external modules layout** (pnpm 11.20.0 or newer). The layout and
+  version-change tests pass on installed pnpm 12.7.0 and 11.20.0. pnpm 10.33.4
+  silently ignores the external modules location, so it is explicitly rejected.
 - pnpm's standard build approval policy applies. zx does not grant packages
   permission to run dependency lifecycle scripts.
 - `--registry` is passed to pnpm. User/global pnpm authentication and settings
@@ -71,6 +73,9 @@ zx's private importer against the same `node_modules`.
   process may leave `node_modules/.zx-install/install.lock`; remove it manually
   only after ensuring no install is running.
 - pnpm errors stop execution; zx never runs the script after a failed install.
+- Parsing is unchanged: when the same package occurs more than once, its last
+  detected import/require supplies the version. An unversioned later require
+  (including one for `package.json`) requests `latest` again.
 
 ## Verification
 
@@ -91,8 +96,17 @@ failures, and one skip: five color-sensitive log assertions, two existing
 `chalk.level` export expectations, and one nonstandard-extension error-text
 expectation. The six log/extension failures reproduce against the original
 generated checkout, whose original build also exposes `chalk.level` as
-`undefined`. `FORCE_COLOR=3` makes the five log tests pass. These unrelated
+`undefined`. A subsequent full run with `FORCE_COLOR=3` passes 275 of 277 tests,
+with one skip and only the existing nonstandard-extension assertion failing;
+the color setting fixes both log and export expectations. These unrelated
 upstream/environment issues are not changed by this fork.
+
+The fork is globally live-linked at `~/.local/share/pnpm/bin/zx`. An end-to-end
+check through that executable passed original-path and relative-import checks,
+7.0.0 → 6.0.0 version changes, warm reruns, identical shared-store symlink
+targets across directories, and byte-preserved project manifests/lockfiles.
+The harness's default `PATH` omits that bin directory: invoke it by full path or
+add the directory to `PATH`. No shell startup configuration was changed.
 
 The fork itself need not migrate its build toolchain to pnpm to use pnpm for
 script dependencies. Local npm-installed build dependencies were privately

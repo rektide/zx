@@ -17,7 +17,7 @@ import { createServer } from 'node:http'
 import { describe, test } from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { $, fs, path, tmpdir } from '../build/index.js'
-import { installDeps } from '../build/deps.cjs'
+import { installDeps, parseDeps } from '../build/deps.cjs'
 
 const cli = fileURLToPath(new URL('../build/cli.js', import.meta.url))
 const statePath = (cwd) => path.join(cwd, 'node_modules', '.zx-install')
@@ -102,12 +102,12 @@ describe('pnpm no-save installer', () => {
       'export default "relative"'
     )
     const script = path.join(cwd, 'script.mjs')
-    await fs.writeFile(
-      script,
-      `import isNumber from 'is-number' // @7.0.0
+    const content = `import isNumber from 'is-number' // @7.0.0
 import helper from './helper.mjs'
-console.log(JSON.stringify({ helper, number: isNumber(42), url: import.meta.url, dir: __dirname, cwd: process.cwd(), version: require('is-number/package.json').version }))`
-    )
+const getPackage = require
+console.log(JSON.stringify({ helper, number: isNumber(42), url: import.meta.url, dir: __dirname, cwd: process.cwd(), version: getPackage('is-number/package.json').version }))`
+    assert.deepEqual(parseDeps(content), { 'is-number': '7.0.0' })
+    await fs.writeFile(script, content)
     const out = await $({ cwd: launch })`node ${cli} --install ${script}`
     assert.deepEqual(JSON.parse(out.stdout.trim().split('\n').at(-1)), {
       helper: 'relative',
@@ -195,10 +195,10 @@ console.log(JSON.stringify({ helper, number: isNumber(42), url: import.meta.url,
     assert(await fs.pathExists(lock))
   })
 
-  test('rejects pnpm versions without a global virtual store', async (t) => {
+  test('rejects pnpm versions without the supported external modules layout', async (t) => {
     const cwd = temp(t)
     const bin = path.join(cwd, 'bin')
-    await fs.outputFile(path.join(bin, 'pnpm'), '#!/bin/sh\necho 10.12.0\n')
+    await fs.outputFile(path.join(bin, 'pnpm'), '#!/bin/sh\necho 11.19.0\n')
     await fs.chmod(path.join(bin, 'pnpm'), 0o755)
     const out = await $({
       cwd,
@@ -208,7 +208,7 @@ console.log(JSON.stringify({ helper, number: isNumber(42), url: import.meta.url,
       },
     })`${process.execPath} ${cli} -i -e 'import "is-number"'`.nothrow()
     assert.notEqual(out.exitCode, 0)
-    assert.match(out.stderr, /requires pnpm 10.12.1 or newer/)
+    assert.match(out.stderr, /requires pnpm 11.20.0 or newer/)
     assert(!(await fs.pathExists(path.join(statePath(cwd), 'install.lock'))))
   })
 

@@ -178,8 +178,8 @@ function printUsage() {
    --cwd=<path>         set current directory
    --eval=<js>, -e      evaluate script
    --ext=<.mjs>         script extension
-    --install, -i        install dependencies
-    --installer=<name>   dependency installer: pnpm (default) or npm
+   --install, -i        install dependencies
+   --installer=<name>   dependency installer: pnpm (default) or npm
    --registry=<URL>     npm registry, defaults to https://registry.npmjs.org/
    --version, -v        print current zx version
    --help, -h           print help
