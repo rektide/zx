@@ -1,5 +1,8 @@
 <h1><img src="https://google.github.io/zx/img/logo.svg" alt="Zx logo" height="32" width="28" valign="middle"> zx</h1>
 
+This fork uses pnpm for `--install`, with no-save project semantics and a shared
+virtual store. See the [fork's installer contract and limitations](doc/pnpm/README.md).
+
 ```js
 #!/usr/bin/env zx
 

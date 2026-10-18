@@ -13,21 +13,21 @@
 // limitations under the License.
 
 import { builtinModules } from 'node:module'
-import { $, spinner, Fail } from './index.ts'
+import { $, spinner, Fail, fs, path, YAML } from './index.ts'
 import { depseek } from './vendor.ts'
 
 /**
- * Install npm dependencies
+ * Install script dependencies without changing the project manifest
  * @param dependencies object of dependencies
- * @param prefix  path to the directory where npm should install the dependencies
+ * @param prefix path to the directory where dependencies should be installed
  * @param registry custom npm registry URL when installing dependencies
- * @param installerType package manager: npm, yarn, pnpm, bun, etc.
+ * @param installerType package manager: pnpm (default) or npm
  */
 export async function installDeps(
   dependencies: Record<string, string>,
   prefix?: string,
   registry?: string,
-  installerType = 'npm'
+  installerType = 'pnpm'
 ): Promise<void> {
   const installer = installers[installerType]
   const packages = Object.entries(dependencies).map(
@@ -61,6 +61,87 @@ const installers: Record<any, DepsInstaller> = {
       registry && `--registry=${registry}`,
     ].filter(Boolean)
     await $`npm install ${flags} ${packages}`.nothrow()
+  },
+  pnpm: async ({ packages, prefix, registry }) => {
+    const modulesDir = path.resolve(prefix || $.cwd || '.', 'node_modules')
+    const stateDir = path.join(modulesDir, '.zx-install')
+    const manifestPath = path.join(stateDir, 'package.json')
+
+    // Never let pnpm purge/recreate a tree belonging to a different importer.
+    if (
+      !(await fs.pathExists(manifestPath)) &&
+      (await fs.pathExists(path.join(modulesDir, '.modules.yaml')))
+    ) {
+      throw new Fail(
+        'node_modules is already managed by another pnpm importer. Install with the project package manager and run zx without --install, or use a separate script directory.'
+      )
+    }
+
+    await fs.ensureDir(stateDir)
+    const lock = path.join(stateDir, 'install.lock')
+    try {
+      await fs.mkdir(lock)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      throw new Fail(
+        `Another zx dependency install holds ${lock}. If the installer was killed, remove this lock only after checking that no install is running.`
+      )
+    }
+
+    try {
+      if (await fs.pathExists(manifestPath)) {
+        const manifest = await fs.readJson(manifestPath)
+        if (
+          manifest.name !== 'zx-script-dependencies' ||
+          manifest.private !== true
+        ) {
+          throw new Fail(
+            `Refusing to overwrite an unrecognized ${manifestPath}`
+          )
+        }
+      } else {
+        await fs.writeJson(manifestPath, {
+          name: 'zx-script-dependencies',
+          private: true,
+        })
+      }
+
+      // The private workspace stops discovery of enclosing user workspaces.
+      // Absolute modulesDir is required by pnpm 12 for direct dependency links.
+      await fs.writeFile(
+        path.join(stateDir, 'pnpm-workspace.yaml'),
+        YAML.stringify({
+          packages: [],
+          modulesDir,
+          nodeLinker: 'isolated',
+          virtualStoreType: 'global',
+          enableGlobalVirtualStore: true,
+          // pnpm 12's frozen fast path ignores modulesDir when relinking.
+          preferFrozenLockfile: false,
+        })
+      )
+      const run = $({ cwd: stateDir })
+      const version = (await run`pnpm --version`.quiet().nothrow(false)).stdout
+      const [major, minor, patch] =
+        version
+          .trim()
+          .match(/^(\d+)\.(\d+)\.(\d+)/)
+          ?.slice(1)
+          .map(Number) || []
+      if (!(
+        major > 10 ||
+        (major === 10 && (minor > 12 || (minor === 12 && patch >= 1)))
+      )) {
+        throw new Fail('The pnpm installer requires pnpm 10.12.1 or newer')
+      }
+
+      const flags = [registry && `--registry=${registry}`].filter(Boolean)
+      // pnpm adds to its own persistent importer, not the user's manifest.
+      // Earlier script dependencies stay installed; pnpm owns all linking.
+      await run`pnpm add --save-exact ${flags} ${packages}`.nothrow(false)
+    } finally {
+      await fs.rmdir(lock)
+    }
   },
 }
 

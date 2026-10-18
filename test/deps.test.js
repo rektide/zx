@@ -80,7 +80,8 @@ describe('deps', () => {
         () =>
           installDeps({ foo: 'latest' }, cwd, 'https://npm.jsr.io', 'invalid'),
         {
-          message: /Unsupported installer type: invalid. Supported types: npm/,
+          message:
+            /Unsupported installer type: invalid. Supported types: npm, pnpm/,
         }
       )
     })

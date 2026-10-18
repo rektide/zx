@@ -16,7 +16,7 @@ module.exports = __toCommonJS(deps_exports);
 var import_node_module = require("module");
 var import_index = require("./index.cjs");
 var import_vendor = require("./vendor.cjs");
-function installDeps(dependencies, prefix, registry, installerType = "npm") {
+function installDeps(dependencies, prefix, registry, installerType = "pnpm") {
   return __async(this, null, function* () {
     const installer = installers[installerType];
     const packages = Object.entries(dependencies).map(
@@ -44,6 +44,64 @@ var installers = {
       registry && `--registry=${registry}`
     ].filter(Boolean);
     yield import_index.$`npm install ${flags} ${packages}`.nothrow();
+  }),
+  pnpm: (_0) => __async(null, [_0], function* ({ packages, prefix, registry }) {
+    var _a;
+    const modulesDir = import_index.path.resolve(prefix || import_index.$.cwd || ".", "node_modules");
+    const stateDir = import_index.path.join(modulesDir, ".zx-install");
+    const manifestPath = import_index.path.join(stateDir, "package.json");
+    if (!(yield import_index.fs.pathExists(manifestPath)) && (yield import_index.fs.pathExists(import_index.path.join(modulesDir, ".modules.yaml")))) {
+      throw new import_index.Fail(
+        "node_modules is already managed by another pnpm importer. Install with the project package manager and run zx without --install, or use a separate script directory."
+      );
+    }
+    yield import_index.fs.ensureDir(stateDir);
+    const lock = import_index.path.join(stateDir, "install.lock");
+    try {
+      yield import_index.fs.mkdir(lock);
+    } catch (err) {
+      if (err.code !== "EEXIST") throw err;
+      throw new import_index.Fail(
+        `Another zx dependency install holds ${lock}. If the installer was killed, remove this lock only after checking that no install is running.`
+      );
+    }
+    try {
+      if (yield import_index.fs.pathExists(manifestPath)) {
+        const manifest = yield import_index.fs.readJson(manifestPath);
+        if (manifest.name !== "zx-script-dependencies" || manifest.private !== true) {
+          throw new import_index.Fail(
+            `Refusing to overwrite an unrecognized ${manifestPath}`
+          );
+        }
+      } else {
+        yield import_index.fs.writeJson(manifestPath, {
+          name: "zx-script-dependencies",
+          private: true
+        });
+      }
+      yield import_index.fs.writeFile(
+        import_index.path.join(stateDir, "pnpm-workspace.yaml"),
+        import_index.YAML.stringify({
+          packages: [],
+          modulesDir,
+          nodeLinker: "isolated",
+          virtualStoreType: "global",
+          enableGlobalVirtualStore: true,
+          // pnpm 12's frozen fast path ignores modulesDir when relinking.
+          preferFrozenLockfile: false
+        })
+      );
+      const run = (0, import_index.$)({ cwd: stateDir });
+      const version = (yield run`pnpm --version`.quiet().nothrow(false)).stdout;
+      const [major, minor, patch] = ((_a = version.trim().match(/^(\d+)\.(\d+)\.(\d+)/)) == null ? void 0 : _a.slice(1).map(Number)) || [];
+      if (!(major > 10 || major === 10 && (minor > 12 || minor === 12 && patch >= 1))) {
+        throw new import_index.Fail("The pnpm installer requires pnpm 10.12.1 or newer");
+      }
+      const flags = [registry && `--registry=${registry}`].filter(Boolean);
+      yield run`pnpm add --save-exact ${flags} ${packages}`.nothrow(false);
+    } finally {
+      yield import_index.fs.rmdir(lock);
+    }
   })
 };
 var builtins = new Set(import_node_module.builtinModules);
@@ -60,10 +118,10 @@ function parseDeps(content) {
     return m;
   }, {});
 }
-function parsePackageName(path) {
+function parsePackageName(path2) {
   var _a, _b;
-  if (!path || path.includes(":")) return;
-  const name = (_b = (_a = nameRe.exec(path)) == null ? void 0 : _a.groups) == null ? void 0 : _b.name;
+  if (!path2 || path2.includes(":")) return;
+  const name = (_b = (_a = nameRe.exec(path2)) == null ? void 0 : _a.groups) == null ? void 0 : _b.name;
   if (name && !builtins.has(name)) return name;
 }
 function parseVersion(line) {

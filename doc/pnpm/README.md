@@ -3,7 +3,7 @@ type: ImplementationNote
 title: pnpm no-save script dependencies
 description: Fork contract and implementation boundary for installing script dependencies through pnpm's shared virtual store.
 resource: /doc/pnpm/README.md
-status: implementation-in-progress
+status: implemented
 generated:
   at: 2026-10-18
   by: model:openai/gpt-6.1-sol#xhigh
@@ -37,7 +37,11 @@ Instead, zx keeps its own importer in `node_modules/.zx-install/`:
 - A private `package.json` records accumulated script dependencies.
 - `pnpm-workspace.yaml` isolates this importer from enclosing workspaces and
   sets **absolute** `modulesDir`, `nodeLinker: isolated`, and
-  `virtualStoreType: global` (with its compatible boolean alias).
+  `virtualStoreType: global` (with its compatible boolean alias). It disables
+  `preferFrozenLockfile`: pnpm 12.7.0's frozen fast path otherwise updates the
+  private manifest while incorrectly relinking under the importer instead of
+  the external modules directory. The version-change regression test catches
+  this; pnpm's normal resolver/linker handles it correctly.
 - pnpm owns resolution, its private lockfile, dependency links, and bin links.
   `pnpm add --save-exact` updates requested versions and preserves earlier
   dependencies in the private importer. zx does not prune old script imports.
@@ -70,11 +74,29 @@ zx's private importer against the same `node_modules`.
 
 ## Verification
 
-The implementation's focused tests belong in `test/deps.test.js`; build through
-the upstream `npm run build` command. The fork itself need not migrate its build
-toolchain to pnpm to use pnpm for script dependencies. The local npm-installed
-build dependencies were privately copied from the generated zx checkout; its
-unrelated edits were not copied.
+Focused tests in `test/pnpm.test.js` and the existing `test/deps.test.js` pass
+(20 tests) with Node 26.6.0 and pnpm 12.7.0. They cover shared-store targets,
+byte-preserved root manifests/lockfiles, enclosing workspace isolation, retained
+dependencies, changed versions, original script paths and relative imports,
+eval/stdin, reruns, registry failures, importer ownership, install locks,
+minimum pnpm versions, and explicit npm selection. `test:types`, `test:license`,
+changed-file formatting, and `test:size` also pass. Size budgets were refreshed
+with the upstream `build:size-limit` script for the added installer and README
+notice; no runtime dependency was added.
+
+Build through the upstream `npm run build` command. Its `test:unit` invocation
+uses `--experimental-transform-types`, removed by local Node 26; the full suite
+was instead run with installed Node 24.10.0. That run had 267 passes, eight
+failures, and one skip: five color-sensitive log assertions, two existing
+`chalk.level` export expectations, and one nonstandard-extension error-text
+expectation. The six log/extension failures reproduce against the original
+generated checkout, whose original build also exposes `chalk.level` as
+`undefined`. `FORCE_COLOR=3` makes the five log tests pass. These unrelated
+upstream/environment issues are not changed by this fork.
+
+The fork itself need not migrate its build toolchain to pnpm to use pnpm for
+script dependencies. Local npm-installed build dependencies were privately
+copied from the generated zx checkout; its unrelated edits were not copied.
 
 Upstream references: [CLI install behavior](../../docs/cli.md#--install) and
 [dependency parser and installers](../../src/deps.ts).

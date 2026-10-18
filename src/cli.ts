@@ -44,9 +44,9 @@ const EXT_RE = /^\.[mc]?[jt]sx?$/
 
 // prettier-ignore
 export const argv: minimist.ParsedArgs = parseArgv(process.argv.slice(2), {
-  default: resolveDefaults({ ['prefer-local']: false } as any, 'ZX_', process.env, new Set(['env', 'install', 'registry'])),
+  default: resolveDefaults({ ['prefer-local']: false, installer: 'pnpm' } as any, 'ZX_', process.env, new Set(['env', 'install', 'registry', 'installer'])),
   // exclude 'prefer-local' to let minimist infer the type
-  string: ['shell', 'prefix', 'postfix', 'eval', 'cwd', 'ext', 'registry', 'env'],
+  string: ['shell', 'prefix', 'postfix', 'eval', 'cwd', 'ext', 'registry', 'installer', 'env'],
   boolean: ['version', 'help', 'quiet', 'verbose', 'install', 'repl', 'experimental'],
   alias: { e: 'eval', i: 'install', v: 'version', h: 'help', l: 'prefer-local', 'env-file': 'env' },
   stopEarly: true,
@@ -88,7 +88,8 @@ export function printUsage() {
    --cwd=<path>         set current directory
    --eval=<js>, -e      evaluate script
    --ext=<.mjs>         script extension
-   --install, -i        install dependencies
+    --install, -i        install dependencies
+    --installer=<name>   dependency installer: pnpm (default) or npm
    --registry=<URL>     npm registry, defaults to https://registry.npmjs.org/
    --version, -v        print current zx version
    --help, -h           print help
@@ -160,7 +161,7 @@ async function runScript(
       nmLink = linkNodeModules(cwd, argv.preferLocal)
     }
     if (argv.install) {
-      await installDeps(parseDeps(script), cwd, argv.registry)
+      await installDeps(parseDeps(script), cwd, argv.registry, argv.installer)
     }
 
     injectGlobalRequire(scriptPath)

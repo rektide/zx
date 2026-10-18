@@ -139,9 +139,9 @@ var import_meta = {};
 var EXT = ".mjs";
 var EXT_RE = /^\.[mc]?[jt]sx?$/;
 var argv = (0, import_index.parseArgv)(import_node_process2.default.argv.slice(2), {
-  default: (0, import_index.resolveDefaults)({ ["prefer-local"]: false }, "ZX_", import_node_process2.default.env, /* @__PURE__ */ new Set(["env", "install", "registry"])),
+  default: (0, import_index.resolveDefaults)({ ["prefer-local"]: false, installer: "pnpm" }, "ZX_", import_node_process2.default.env, /* @__PURE__ */ new Set(["env", "install", "registry", "installer"])),
   // exclude 'prefer-local' to let minimist infer the type
-  string: ["shell", "prefix", "postfix", "eval", "cwd", "ext", "registry", "env"],
+  string: ["shell", "prefix", "postfix", "eval", "cwd", "ext", "registry", "installer", "env"],
   boolean: ["version", "help", "quiet", "verbose", "install", "repl", "experimental"],
   alias: { e: "eval", i: "install", v: "version", h: "help", l: "prefer-local", "env-file": "env" },
   stopEarly: true,
@@ -178,7 +178,8 @@ function printUsage() {
    --cwd=<path>         set current directory
    --eval=<js>, -e      evaluate script
    --ext=<.mjs>         script extension
-   --install, -i        install dependencies
+    --install, -i        install dependencies
+    --installer=<name>   dependency installer: pnpm (default) or npm
    --registry=<URL>     npm registry, defaults to https://registry.npmjs.org/
    --version, -v        print current zx version
    --help, -h           print help
@@ -244,7 +245,7 @@ function runScript(script, scriptPath, tempPath) {
         nmLink = linkNodeModules(cwd, argv.preferLocal);
       }
       if (argv.install) {
-        yield (0, import_deps.installDeps)((0, import_deps.parseDeps)(script), cwd, argv.registry);
+        yield (0, import_deps.installDeps)((0, import_deps.parseDeps)(script), cwd, argv.registry, argv.installer);
       }
       injectGlobalRequire(scriptPath);
       import_node_process2.default.once("exit", rmTemp);
